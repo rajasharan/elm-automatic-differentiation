@@ -1,22 +1,65 @@
-module AD.Reverse exposing (..)
+module AD.Reverse
+  exposing
+    ( Node(Variable, Const)
+    , sqr, exp, sin, cos
+    , pow, add, mul
+    , (|+|), (|.|), (|*|), (|^|)
+    , autodiff, nodeValue
+    )
+
+{-| This library calculates the paritial derivatives of a multi-variable function
+using the method of automatic differentiation in reverse mode. The result is returned
+as a dictionary of keys and their corresponding derivative values (a.k.a the gradient vector).
+
+# Definition
+@docs Node
+
+# Common helpers for building the computation graph
+@docs sqr, exp, sin, cos, pow, add, mul
+
+# Infix operators
+@docs (|+|), (|.|), (|*|), (|^|)
+
+# Automatic differentiation
+@docs autodiff
+
+# Misc.
+@docs nodeValue
+
+-}
 
 import List exposing (..)
 import Dict exposing (Dict)
 
-type Node = Variable String Float
-          | Const Float
-          | Node Float (List Edge)
+{-| Represent values as a Node in the computation graph. Build up the function
+by combining various Variable and Const with the help of helper functions below.
+
+    a = Variable "x" 3.2
+    b = Variable "y" 4.7
+    c = a |*| (b |+| (Const 1))
+-}
+type Node
+  = Variable String Float
+  | Const Float
+  | Node Float (List Edge)
 
 -- Edge toNode weight
 type Edge = Edge Node Float
 
---nodeValue : Node -> Float
---nodeValue node =
-  --case node of
-    --Variable _ v -> v
-    --Const v -> v
-    --Node v _ -> v
+{-| Helper method to retrieve the node value
+-}
+nodeValue : Node -> Float
+nodeValue node =
+  case node of
+    Variable _ v -> v
+    Const v -> v
+    Node v _ -> v
 
+{-| square a node's computation
+
+    a = Variable "x" 3.2
+    b = sqr a
+-}
 sqr : Node -> Node
 sqr n =
   case n of
@@ -24,6 +67,11 @@ sqr n =
     Const val -> Const (val^2)
     Node val _ -> Node (val^2) [Edge n (2*val)]
 
+{-| exponent of a node's computation
+
+    a = Variable "x" 3.2
+    b = exp a
+-}
 exp : Node -> Node
 exp n =
   case n of
@@ -31,6 +79,8 @@ exp n =
     Const val -> Const (Basics.e^val)
     Node val _ -> Node (Basics.e^val) [Edge n (Basics.e^val)]
 
+{-| sin of a node's computation
+-}
 sin : Node -> Node
 sin n =
   case n of
@@ -38,6 +88,8 @@ sin n =
     Const val -> Const (Basics.sin val)
     Node val _ -> Node (Basics.sin val) [Edge n (Basics.cos val)]
 
+{-| cos of a node's computation
+-}
 cos : Node -> Node
 cos n =
   case n of
@@ -45,6 +97,12 @@ cos n =
     Const val -> Const (Basics.cos val)
     Node val _ -> Node (Basics.cos val) [Edge n (Basics.sin -val)]
 
+{-| pow of a node's computation. The second arg has to be a constant.
+For e.g. to calculate `(x^3)`
+
+    a = Variable "x" 4
+    b = pow a (Const 3)
+-}
 pow : Node -> Node -> Node
 pow n1 n2 =
   let
@@ -55,9 +113,13 @@ pow n1 n2 =
         (Node v1 _, Const v2) -> node v1 v2 n1 n2
         _ -> Debug.crash "unsupported pow operation"
 
+{-| Infix operator for `pow`
+-}
+(|^|) : Node -> Node -> Node
 (|^|) = pow
 
-
+{-| Add two node computations
+-}
 add : Node -> Node -> Node
 add n1 n2 =
   let
@@ -74,8 +136,13 @@ add n1 n2 =
         (Const v1, Node v2 _) -> node v1 v2 n1 n2
         (Variable l1 v1, Node v2 _) -> node v1 v2 n1 n2
 
+{-| Infix operator for `add`
+-}
+(|+|) : Node -> Node -> Node
 (|+|) = add
 
+{-| Multiply two node computations
+-}
 mul : Node -> Node -> Node
 mul n1 n2 =
   let
@@ -92,56 +159,15 @@ mul n1 n2 =
         (Const v1, Node v2 _) -> node v1 v2 n1 n2
         (Variable l1 v1, Node v2 _) -> node v1 v2 n1 n2
 
+{-| Infix operator for `mul`
+-}
+(|.|) : Node -> Node -> Node
 (|.|) = mul
+
+{-| Infix operator for `mul`
+-}
+(|*|) : Node -> Node -> Node
 (|*|) = mul
-
--- graph for f(x,y) = (x^2 + x.y + y^2)
-g1 : Node
-g1 =
-  let
-      x = Variable "x" 3
-      y = Variable "y" 2
-      z = (x |.| x |.| x) |+| (y |.| x) |+| (y |.| y)
-  in
-      z
-
--- (a+b)^2 . e^(2.(b+1)) + sin (a+b)^2
-g2 : Node
-g2 =
-  let
-      a = Variable "a" 3
-      b = Variable "b" 2
-      u = (a |+| b) |.| (a |+| b)
-      v = (b |+| Const 1)
-      w = sqr (exp v)
-      z = u |.| w |+| sin u
-  in
-      z
-
-g3 x y =
-  let
-      a = Variable "x" x
-      b = Variable "y" y
-      z = a |.| b |.| a |.| b
-  in
-      z
-
-g4 x y =
-  let
-      a = Variable "x" x
-      b = Variable "y" y
-      z = (a |.| a) |+| (b |.| b)
-  in
-      z
-
-g5 x = Variable "x" x |^| Const -0.5
-
-g6 x y =
-  let
-      a = Variable "x" x
-      b = Variable "y" y
-  in
-      cos (pow ((a |.| a) |+| (b |.| b)) (Const 0.5))
 
 traverse : Edge -> Float -> List (String, Float)
 traverse edge acc =
@@ -168,6 +194,13 @@ group result =
   in
       foldr (\(label, df) d -> Dict.update label (exists df) d) dict result
 
+{-| The `autodiff` function calculates the derivatives of all Variables in a computation.
+Returns a dictionary of keys and their corresponding derivative values.
+
+    a = Variable "x" 3
+    b = a |^| (Const 2)
+    autodiff b == Dict.fromList [("x", 6)]
+-}
 autodiff : Node -> Dict String Float
 autodiff node = group <| ad node 1.0
 

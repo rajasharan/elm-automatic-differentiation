@@ -1,4 +1,9 @@
 ## Automatic differentiation in reverse mode for elm
+
+This library calculates the paritial derivatives of a multi-variable function
+using the method of automatic differentiation in reverse mode. The result is returned
+as a dictionary of keys and their corresponding derivative values (gradient vector).
+
 - a.k.a [algorithmic differentiation](https://en.wikipedia.org/wiki/Automatic_differentiation)
 - a.k.a [backpropagation](https://en.wikipedia.org/wiki/Backpropagation)
 
@@ -14,7 +19,8 @@ import Dict exposing (Dict)
 import AD.Reverse as AD
   exposing
     ( pow, sqr, exp
-    , add, mul, (|+|), (|.|)
+    , add, mul
+    , (|+|), (|.|), (|*|), (|^|)
     , autodiff
     )
 ```
@@ -31,7 +37,7 @@ f x y =
       u = pow (a |+| b) (AD.Const 2)
       v = (b |+| AD.Const 1)
       w = sqr (exp v)
-      z = u |.| w |+| AD.sin u
+      z = u |*| w |+| AD.sin u
   in
       z
 
@@ -53,7 +59,7 @@ g x =
   let
       a = AD.Variable "x" x
   in
-      pow a (AD.Const 2)
+      a |^| (AD.Const 2)
 
 result2 = autodiff (g 6)
 -- [("x", 12)]
